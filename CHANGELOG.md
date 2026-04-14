@@ -4,6 +4,14 @@
 
 ### Fixes
 
+- NixOS: redirect node-llama-cpp's compiled binary output to a
+  user-writable directory (`$XDG_CACHE_HOME/qmd/llama-build` by default,
+  override via `QMD_LLAMA_BUILD_DIR`). On immutable-root systems the
+  default path inside `node_modules` is read-only, causing `qmd embed`
+  to fail with `EACCES`. The Nix wrapper now sets
+  `NODE_LLAMA_CPP_LOCAL_BUILDS_DIR` before the process starts, and the
+  `config.js` patch follows the same `env-var` pattern already used for
+  xpacks directories. `resolveLlamaBuildDir()` is exported for SDK users.
 - GPU: respect explicit `QMD_LLAMA_GPU=metal|vulkan|cuda` backend overrides instead of always using auto GPU selection. #529
 - Fix: preserve original filename case in `handelize()`. The previous
   `.toLowerCase()` call made indexed paths unreachable on case-sensitive

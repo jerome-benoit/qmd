@@ -214,6 +214,34 @@ const MODEL_CACHE_DIR = process.env.XDG_CACHE_HOME
   : join(homedir(), ".cache", "qmd", "models");
 export const DEFAULT_MODEL_CACHE_DIR = MODEL_CACHE_DIR;
 
+/**
+ * Resolve the directory where node-llama-cpp should store compiled llama.cpp binaries.
+ *
+ * On immutable-root systems (NixOS, etc.), node-llama-cpp's default build output
+ * directory lives inside node_modules (read-only). This function computes a
+ * user-writable path following QMD's XDG convention, so the Nix wrapper can set
+ * `NODE_LLAMA_CPP_LOCAL_BUILDS_DIR` before the process starts.
+ *
+ * Resolution order:
+ *   1. QMD_LLAMA_BUILD_DIR env var (explicit override)
+ *   2. $XDG_CACHE_HOME/qmd/llama-build
+ *   3. ~/.cache/qmd/llama-build
+ *
+ * NOTE: This value must be set as NODE_LLAMA_CPP_LOCAL_BUILDS_DIR *before* the
+ * process starts (e.g. via shell wrapper), because node-llama-cpp resolves its
+ * config at module import time (ESM top-level). Setting it at runtime is too late.
+ */
+export function resolveLlamaBuildDir(): string {
+  if (process.env.QMD_LLAMA_BUILD_DIR) {
+    return process.env.QMD_LLAMA_BUILD_DIR;
+  }
+  const cacheBase = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+  return join(cacheBase, "qmd", "llama-build");
+}
+
+/** Default llama.cpp build directory (follows XDG_CACHE_HOME convention) */
+export const DEFAULT_LLAMA_BUILD_DIR = resolveLlamaBuildDir();
+
 export type PullResult = {
   model: string;
   path: string;

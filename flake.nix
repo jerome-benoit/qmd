@@ -6,9 +6,20 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs =
     {
-      homeModules.default = { config, lib, pkgs, ... }:
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    {
+      homeModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
         with lib;
         let
           cfg = config.programs.qmd;
@@ -29,8 +40,9 @@
             home.packages = [ cfg.package ];
           };
         };
-    } //
-    flake-utils.lib.eachDefaultSystem (system:
+    }
+    // flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         packageJson = builtins.fromJSON (builtins.readFile ./package.json);
@@ -38,7 +50,7 @@
 
         # SQLite with loadable extension support for sqlite-vec
         sqliteWithExtensions = pkgs.sqlite.overrideAttrs (old: {
-          configureFlags = (old.configureFlags or []) ++ [
+          configureFlags = (old.configureFlags or [ ]) ++ [
             "--enable-load-extension"
           ];
         });
@@ -103,9 +115,10 @@
             pkgs.makeWrapper
             pkgs.nodejs
             pkgs.node-gyp
-            pkgs.python3  # needed by node-gyp to compile better-sqlite3
-          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-            pkgs.darwin.cctools  # provides libtool needed by node-gyp on macOS
+            pkgs.python3 # needed by node-gyp to compile better-sqlite3
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+            pkgs.darwin.cctools # provides libtool needed by node-gyp on macOS
           ];
 
           buildInputs = [ pkgs.sqlite ];
@@ -117,6 +130,16 @@
             chmod -R u+w node_modules
 
             (cd node_modules/better-sqlite3 && node-gyp rebuild --release)
+
+            # Patch node-llama-cpp to respect NODE_LLAMA_CPP_LOCAL_BUILDS_DIR env var
+            # for redirecting compiled binary output to a writable directory on NixOS.
+            # This follows the same env-var pattern already used for xpacks dirs:
+            #   NODE_LLAMA_CPP_XPACKS_STORE_FOLDER / NODE_LLAMA_CPP_XPACKS_CACHE_FOLDER
+            # TODO: Remove this patch once upstream supports this natively.
+            substituteInPlace node_modules/node-llama-cpp/dist/config.js \
+              --replace-fail \
+                'export const llamaLocalBuildBinsDirectory = path.join(llamaDirectory, "localBuilds");' \
+                'export const llamaLocalBuildBinsDirectory = env.get("NODE_LLAMA_CPP_LOCAL_BUILDS_DIR").default(path.join(llamaDirectory, "localBuilds")).asString();'
           '';
 
           installPhase = ''
@@ -130,7 +153,8 @@
             makeWrapper ${pkgs.bun}/bin/bun $out/bin/qmd \
               --add-flags "$out/lib/qmd/src/cli/qmd.ts" \
               --set DYLD_LIBRARY_PATH "${pkgs.sqlite.out}/lib" \
-              --set LD_LIBRARY_PATH "${pkgs.sqlite.out}/lib"
+              --set LD_LIBRARY_PATH "${pkgs.sqlite.out}/lib" \
+              --run 'export NODE_LLAMA_CPP_LOCAL_BUILDS_DIR="''${QMD_LLAMA_BUILD_DIR:-''${XDG_CACHE_HOME:-$HOME/.cache}/qmd/llama-build}"'
           '';
 
           meta = with pkgs.lib; {
